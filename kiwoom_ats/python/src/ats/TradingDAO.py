@@ -30,31 +30,11 @@ class TradingDAO():
                     "price": row[1],
                     "qty": row[2]
                 },
-                "B2": {
+                "S1": {
                     "price": row[3],
                     "qty": row[4]
                 },
-                "S1": {
-                    "price": row[5],
-                    "qty": row[6]
-                },
-                "S2": {
-                    "price": row[7],
-                    "qty": row[8]
-                },
-                "S3": {
-                    "price": row[9],
-                    "qty": row[10]
-                },
-                "S4": {
-                    "price": row[11],
-                    "qty": row[12]
-                },
-                "S5": {
-                    "price": row[13],
-                    "qty": row[14]
-                },
-                "state": row[15]
+                "state": row[5]
             }
             data_list.append(data)
         return data_list
@@ -71,18 +51,8 @@ class TradingDAO():
                         data["stock_code"],
                         data["B1"]["price"],
                         data["B1"]["qty"],
-                        data["B2"]["price"],
-                        data["B2"]["qty"],
                         data["S1"]["price"],
                         data["S1"]["qty"],
-                        data["S2"]["price"],
-                        data["S2"]["qty"],
-                        data["S3"]["price"],
-                        data["S3"]["qty"],
-                        data["S4"]["price"],
-                        data["S4"]["qty"],
-                        data["S5"]["price"],
-                        data["S5"]["qty"],
                         data["state"]
             ))
         else:

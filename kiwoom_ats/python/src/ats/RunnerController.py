@@ -3,9 +3,9 @@ from typing import List
 
 from PyQt5.QtTest import QTest
 
-from ats.ConfigParser import ConfigParser
-from ats.AtsRunner import AtsRunner
-from ats.TradingDAO import TradingDAO
+from python.src.ats.TradingDAO import TradingDAO
+from python.src.ats.AtsRunner import AtsRunner
+from python.src.ats.ConfigParser import ConfigParser
 
 
 class Controller():
@@ -31,7 +31,7 @@ class Controller():
             data = runner.stop_and_save()
 
             if not (runner.state == -1):
-                if (runner.state == 0):
+                if runner.state == 0:
                     self._log.info(f"{data['stock_name']}({data['stock_code']}) DB에서 삭제합니다.")
                     TradingDAO.instance().remove_trading_data(data["stock_code"])
                 else:

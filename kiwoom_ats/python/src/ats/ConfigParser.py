@@ -30,7 +30,7 @@ class ConfigParser():
         for i in range(self.__row_start, self.__row_end):
             stock_name = sheet.cell(i, 2).value
             stock_code = sheet.cell(i, 3).value
-            if (stock_code == None):
+            if stock_code is None:
                 continue
 
             data = {
@@ -39,32 +39,11 @@ class ConfigParser():
                 "B1": {
                     "price": sheet.cell(i, 4).value,
                     "qty": sheet.cell(i, 5).value
-
                 },
-                "B2": {
+                "S1": {
                     "price": sheet.cell(i, 6).value,
                     "qty": sheet.cell(i, 7).value
                 },
-                "S1": {
-                    "price": sheet.cell(i, 8).value,
-                    "qty": sheet.cell(i, 9).value
-                },
-                "S2": {
-                    "price": sheet.cell(i, 10).value,
-                    "qty": sheet.cell(i, 11).value
-                },
-                "S3": {
-                    "price": sheet.cell(i, 12).value,
-                    "qty": sheet.cell(i, 13).value
-                },
-                "S4": {
-                    "price": sheet.cell(i, 14).value,
-                    "qty": sheet.cell(i, 15).value
-                },
-                "S5": {
-                    "price": sheet.cell(i, 16).value,
-                    "qty": sheet.cell(i, 17).value
-                }
             }
 
             config.append(data)
@@ -86,19 +65,9 @@ class ConfigParser():
             sheet.cell(i, 3).value = data["stock_code"]
             sheet.cell(i, 4).value = data["B1"]["price"]
             sheet.cell(i, 5).value = data["B1"]["qty"]
-            sheet.cell(i, 6).value = data["B2"]["price"]
-            sheet.cell(i, 7).value = data["B2"]["qty"]
-            sheet.cell(i, 8).value = data["S1"]["price"]
-            sheet.cell(i, 9).value = data["S1"]["qty"]
-            sheet.cell(i, 10).value = data["S2"]["price"]
-            sheet.cell(i, 11).value = data["S2"]["qty"]
-            sheet.cell(i, 12).value = data["S3"]["price"]
-            sheet.cell(i, 13).value = data["S3"]["qty"]
-            sheet.cell(i, 14).value = data["S4"]["price"]
-            sheet.cell(i, 15).value = data["S4"]["qty"]
-            sheet.cell(i, 16).value = data["S5"]["price"]
-            sheet.cell(i, 17).value = data["S5"]["qty"]
-            sheet.cell(i, 18).value = data["state"]
+            sheet.cell(i, 6).value = data["S1"]["price"]
+            sheet.cell(i, 7).value = data["S1"]["qty"]
+            sheet.cell(i, 8).value = data["state"]
             i += 1
         wb.save(self.FILE_PATH)
         wb.close()
@@ -144,6 +113,14 @@ class ConfigParser():
         wb.close()
         return val
 
+    def is_back_testing_mode(self):
+        wb = openpyxl.load_workbook(self.FILE_PATH)
+        sheet = wb["setting"]
+
+        val = str(sheet["H9"].value.strip()).lower() == "y"
+
+        wb.close()
+        return val
 
     def load_is_power_off(self):
         wb = openpyxl.load_workbook(self.FILE_PATH)

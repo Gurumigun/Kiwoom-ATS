@@ -1,6 +1,6 @@
 import threading
 
-from ats.ConfigParser import ConfigParser
+from python.src.ats.ConfigParser import ConfigParser
 
 
 class RunnerLocker():

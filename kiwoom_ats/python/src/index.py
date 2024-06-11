@@ -8,10 +8,10 @@ import sys
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication
 
-from ats.ConfigParser import ConfigParser
-from ats.KiwoomDAO import KiwoomDAO
-from ats.RunnerController import Controller
-from ats.TradingDAO import TradingDAO
+from python.src.ats.ConfigParser import ConfigParser
+from python.src.ats.RunnerController import Controller
+from python.src.ats.TradingDAO import TradingDAO
+from python.src.ats.KiwoomDAO import KiwoomDAO
 
 
 def get_market_closeing_time() -> datetime.datetime:
@@ -91,30 +91,37 @@ def index():
             print(f"{stock['stock_name']}({stock['stock_code']})")
             QTest.qWait(1000)
 
-    if is_after_market_close_time():
-        sys.exit()
+    if ConfigParser.instance().is_back_testing_mode():
+        print("백테스팅 모드입니다.")
+        QTest.qWait(1000)
+        controller.run_all()
+        QTest.qWait(1000)
+    else:
+        if is_after_market_close_time():
+            print("장 종료되었습니다.")
+            sys.exit()
 
-    if (controller.runner_list.__len__() == 0):
-        print("에러: 실행할 종목이 아무것도 없습니다!")
-        sys.exit()
+        if (controller.runner_list.__len__() == 0):
+            print("에러: 실행할 종목이 아무것도 없습니다!")
+            sys.exit()
 
-    if (is_before_market_start_time()):
-        hour, minute, second = get_hms(get_market_start_time(), datetime.datetime.now())
-        print(f"\n장 시작 까지 {hour}시간 {minute}분 {second}초 남았습니다.")
-        wait_until_market_start()
-    print("장 시작하였습니다!\n5초 후 프로그램 가동!!!\a")
-    QTest.qWait(5000)
-    print("\a")
-    controller.run_all()
+        if (is_before_market_start_time()):
+            hour, minute, second = get_hms(get_market_start_time(), datetime.datetime.now())
+            print(f"\n장 시작 까지 {hour}시간 {minute}분 {second}초 남았습니다.")
+            wait_until_market_start()
+        print("장 시작하였습니다!\n5초 후 프로그램 가동!!!\a")
+        QTest.qWait(5000)
+        print("\a")
+        controller.run_all()
 
-    hour, minute, second = get_hms(
-        get_market_closeing_time(), datetime.datetime.now())
-    print(f"\n장 종료 까지 {hour}시간 {minute}분 {second}초 남았습니다.\n")
-    wait_until_market_close()
+        hour, minute, second = get_hms(
+            get_market_closeing_time(), datetime.datetime.now())
+        print(f"\n장 종료 까지 {hour}시간 {minute}분 {second}초 남았습니다.\n")
+        wait_until_market_close()
 
-    print("장 종료")
-    controller.stop_and_save_all()
-    app.exit()
+        print("장 종료")
+        controller.stop_and_save_all()
+        app.exit()
 
     print("프로그램 종료")
 

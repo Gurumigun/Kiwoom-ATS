@@ -6,9 +6,9 @@ from PyQt5.QAxContainer import QAxWidget
 from PyQt5.QtCore import QEventLoop
 from PyQt5.QtTest import QTest
 
-from ats.StockException import (NoSuchStockCodeError,
-                                 NoSuchStockPositionError,
-                                 StockUpperBoundNotFoundError)
+from python.src.ats.ConfigParser import ConfigParser
+from python.src.ats.StockException import (NoSuchStockCodeError,
+                                 NoSuchStockPositionError)
 
 
 class KiwoomDAO():
@@ -90,7 +90,7 @@ class KiwoomDAO():
         return balance
 
     def get_current_price(self, stock_code: str) -> int:
-        if (not self.__current_price_map.__contains__(stock_code)):
+        if not self.__current_price_map.__contains__(stock_code):
             self.__thread_locker.acquire()
             current_price: str = self.__get_tr_data({
                                 "종목코드": stock_code
@@ -183,7 +183,7 @@ class KiwoomDAO():
         return self.__tr_data_temp
 
     def __generate_scr_no(self, stock_code: str) -> str:
-        if (not self.__scr_no_map.__contains__(stock_code)):
+        if not self.__scr_no_map.__contains__(stock_code):
             self.__scr_no_map[stock_code] = str(self.__scr_no_counter)
             self.__scr_no_counter += 1
 
@@ -193,7 +193,7 @@ class KiwoomDAO():
         val = self.kiwoom_instance.dynamicCall(
                 "CommRqData(QString, QString, QString, QString)", rq_name, tr_code, n_prev_next, scr_no)
         val = int(val)
-        if (val != 0):
+        if val != 0:
             if val == -200:
                 self.__log.fatal(f"RQ DATA [{val}]: 시세 과부하")
             elif val == -201:
@@ -212,12 +212,12 @@ class KiwoomDAO():
         '''
         CommRqData 처리용 슬롯
         '''
-        if (tr_code == "KOA_NORMAL_BUY_KQ_ORD"):
+        if tr_code == "KOA_NORMAL_BUY_KQ_ORD":
             print(scr_no, rq_name, tr_code)
             return
 
         # tr데이터 중, 멀티데이터의 레코드 개수를 받아옴.
-        if (self.__tr_data_cnt_limit == 0):
+        if self.__tr_data_cnt_limit == 0:
             n_record = self.kiwoom_instance.dynamicCall(
                 "GetRepeatCnt(QString, QString)", tr_code, rq_name)
         else:
@@ -240,12 +240,12 @@ class KiwoomDAO():
         self.__tr_global_eventloop.exit()
 
     def __on_event_connect_slot(self, err_code):
-        if (err_code == 0):
+        if err_code == 0:
             self.__log.info("로그인 성공")
         else:
             self.__log.info("로그인 실패")
 
-        if (self.kiwoom_instance.dynamicCall("GetLoginInfo(\"GetServerGubun\")") == "1"):
+        if self.kiwoom_instance.dynamicCall("GetLoginInfo(\"GetServerGubun\")") == "1":
             self.__log.info("모의투자 서버 접속")
         else:
             self.__log.info("실거래 서버 접속")
@@ -257,14 +257,14 @@ class KiwoomDAO():
 
     def __on_receive_real_data(self, stock_code, real_type, real_data):
         # self.__log.debug(f"{real_type}, {stock_code}")
-        if (real_type == "주식체결"):
+        if real_type == "주식체결":
             self.__current_price_map[stock_code] = abs(int(self.kiwoom_instance.dynamicCall(
                 "GetCommRealData(QString, int)", stock_code, 10)))
-        elif (real_type == "장시작시간"):
+        elif real_type == "장시작시간":
             self.__market_status = int(self.kiwoom_instance.dynamicCall(
                 "GetCommRealData(QString, int)", stock_code, 215))
             self.__log.info(f"market status: {self.__market_status}")
-            if (self.__market_status == 8):
+            if self.__market_status == 8:
                 self.__log.info("장 종료")
 
     def __on_receive_chejan_data(self, gubun, item_cnt, fid_list):
@@ -272,10 +272,10 @@ class KiwoomDAO():
         stock_code = self.kiwoom_instance.dynamicCall(
             "GetChejanData(9001)")[1:].strip()
 
-        if (gubun == "0"):
+        if gubun == "0":
             # self.__log.info(f"주문 체결 완료되었습니다!!!\n  계좌번호: {acc_no}, 종목코드: {stock_code}")
             pass
-        elif (gubun == "1"):
+        elif gubun == "1":
             self.__log.info(
                 f"주문 체결 완료되었습니다!!!\n  계좌번호: {acc_no}, 종목코드: {stock_code}")
 
