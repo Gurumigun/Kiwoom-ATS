@@ -131,3 +131,6 @@ dmypy.json
 .vscode/
 *.bat
 !run.bat
+kiwoom_ats/.idea
+.idea
+kiwoom_ats/python/src/resources/.DS_Store
