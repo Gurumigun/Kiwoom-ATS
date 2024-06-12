@@ -2,9 +2,9 @@ import sqlite3
 import time
 
 import pandas as pd
-from PyQt5 import uic
-from PyQt5.QtWidgets import QMainWindow
-from pykiwoom.kiwoom import Kiwoom
+# from PyQt5 import uic
+# from PyQt5.QtWidgets import QMainWindow
+# from pykiwoom.kiwoom import Kiwoom
 
 # form_class = uic.loadUiType("main_ui.ui")[0]
 
@@ -36,18 +36,53 @@ def collect_stock_data(kiwoom, code, start_date):
                                  데이터개수=1000000,
                                  next=0)
     return data
-
-def save_to_database(data):
-    connection = sqlite3.connect('stock_data.db')
+def save_to_database(code, data):
+    connection = sqlite3.connect('src/resources/backtest/stock_data.db')
     cursor = connection.cursor()
-    # 여기에서 데이터를 데이터베이스에 저장하는 코드를 작성합니다.
-    # 예를 들어, INSERT INTO 문을 사용하여 데이터를 삽입할 수 있습니다.
-    cursor.execute('''CREATE TABLE IF NOT EXISTS stock_data
-                      (date TEXT, close_price INTEGER, open_price INTEGER, high_price INTEGER,
-                       low_price INTEGER, volume INTEGER, trading_value INTEGER, cumulative_volume INTEGER)''')
-    cursor.execute("INSERT INTO stock_data VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                   (data['날짜'], data['종가'], data['시가'], data['고가'], data['저가'], data['거래량'], data['거래대금'], data['누적체결수량']))
-    connection.commit()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS back_testing_stock_data
+        ( 
+        stock_code TEXT,
+        current_price INTEGER, 
+        volume INTEGER, 
+        transaction_time TEXT, 
+        open_price INTEGER, 
+        high_price INTEGER, 
+        low_price INTEGER, 
+        price_correction_division INTEGER, 
+        correction_ratio REAL, 
+        major_industry_division TEXT, 
+        minor_industry_division TEXT, 
+        stock_info TEXT, 
+        price_correction_event TEXT, 
+        previous_day_closing_price INTEGER)
+    ''')
+
+
+    cursor.execute('''
+        SELECT * FROM back_testing_stock_data WHERE stock_code = ? AND transaction_time = ?
+    ''', (code, data['체결시간']))
+    rows = cursor.fetchall()
+
+    if len(rows) == 0:
+        cursor.execute('''
+            INSERT INTO back_testing_stock_data 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (str(code),
+              data['현재가'],
+              data['거래량'],
+              int(data['체결시간']),
+              int(data['시가']),
+              int(data['고가']),
+              int(data['저가']),
+              data['수정주가구분'],
+              data['수정비율'],
+              data['대업종구분'],
+              data['소업종구분'],
+              data['종목정보'],
+              data['수정주가이벤트'],
+              data['전일종가']))
+        connection.commit()
     connection.close()
 
 def main():
@@ -84,7 +119,12 @@ def main():
     df.to_excel(f"기준일자={end_date}_{etf_code}.xlsx")
 
 if __name__ == "__main__":
-    main()
+    # main()
+    stock_code = "233740"
+    data = pd.read_excel('src/resources/backtest/test_233740.XLSX')
+
+    for index, row in data.iterrows():
+        save_to_database(stock_code, row.to_dict())
 
     # app = QApplication(sys.argv)
     # myWindow = tradesystem()

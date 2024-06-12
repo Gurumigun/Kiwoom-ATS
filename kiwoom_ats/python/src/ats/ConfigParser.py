@@ -50,6 +50,35 @@ class ConfigParser():
         wb.close()
         return config
 
+    def load_back_testing_stock_config(self):
+        ''' 백테스팅용 - 로컬에서 주식 설정을 불러온다.
+        '''
+        wb = openpyxl.load_workbook(self.FILE_PATH)
+        sheet = wb["backtesting"]
+        config = list()
+        for i in range(self.__row_start, self.__row_end):
+            stock_name = sheet.cell(i, 2).value
+            stock_code = sheet.cell(i, 3).value
+            if stock_code is None:
+                continue
+
+            data = {
+                "stock_code": stock_code,
+                "stock_name": stock_name,
+                "B1": {
+                    "price": sheet.cell(i, 4).value,
+                    "qty": sheet.cell(i, 5).value
+                },
+                "S1": {
+                    "price": sheet.cell(i, 6).value,
+                    "qty": sheet.cell(i, 7).value
+                },
+            }
+
+            config.append(data)
+        wb.close()
+        return config
+
 
     def add_unfinished_stock(self, data_list):
         wb = openpyxl.load_workbook(self.FILE_PATH)

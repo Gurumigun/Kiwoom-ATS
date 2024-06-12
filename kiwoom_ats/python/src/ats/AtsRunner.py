@@ -2,6 +2,7 @@ import logging
 import threading
 import time
 
+from python.src.ats.ConfigParser import ConfigParser
 from python.src.ats.KiwoomDAO import KiwoomDAO
 from python.src.ats.RunnerLocker import RunnerLocker
 from python.src.ats.StockException import NoSuchStockPositionError
@@ -12,17 +13,22 @@ class AtsRunner(threading.Thread):
     state = -1
     run_flag = True
     current_price: int
+    is_back_testing_mode = False
     logger = logging.getLogger(__name__)
 
     def __init__(self, config):
         super().__init__()
         self.config = config
-        if "거래정지" in KiwoomDAO.instance().get_stock_state(self.config["stock_code"]):
-            self.logger.info(self.__format_log_msg("거래정지 되었습니다."))
-        if config.__contains__("state"):
-            self.logger.info(self.__format_log_msg(f"이전 거래 데이터 불러왔습니다. state: {config['state']}"))
-            self.state = config["state"]
-            RunnerLocker.instance().open_locker()
+        self.is_back_testing_mode = ConfigParser.instance().is_back_testing_mode()
+
+        if not self.is_back_testing_mode:
+            if "거래정지" in KiwoomDAO.instance().get_stock_state(self.config["stock_code"]):
+                self.logger.info(self.__format_log_msg("거래정지 되었습니다."))
+
+            if config.__contains__("state"):
+                self.logger.info(self.__format_log_msg(f"이전 거래 데이터 불러왔습니다. state: {config['state']}"))
+                self.state = config["state"]
+                RunnerLocker.instance().open_locker()
         self.refresh_all_data()
         self.logger.info(self.__format_log_msg("실행 준비 완료"))
 
@@ -36,10 +42,16 @@ class AtsRunner(threading.Thread):
 
         if self.state != -1 and not self.state == 0:
             RunnerLocker.instance().close_locker()
+
         self.logger.info(self.__format_log_msg("스레드 종료합니다."))
 
-
     def processing_loop(self):
+        if self.is_back_testing_mode:
+            if KiwoomDAO.instance().get_backtest_latest_trade_price(self.config["stock_code"]) is None:
+                self.state = -1
+            else :
+                self.state = 1
+        print(f"{"[백테스트]" if self.is_back_testing_mode else ""} processing_loop 시작 {self.state}")
         while self.run_flag:
             self.refresh_all_data()
             if self.state == -1:
@@ -57,34 +69,48 @@ class AtsRunner(threading.Thread):
             time.sleep(0.1)
 
     def process_state_initial(self):
+        print("최초 구매")
         # processing state: -1
-        if self.current_price <= self.config["B1"]["price"]:
-            RunnerLocker.instance().open_locker()
-            self.logger.info(self.__format_log_msg("B1 매수 타점 도달하였습니다!"))
-            self.open_position(self.config["B1"]["qty"])
-            self.logger.info(self.__format_log_msg("Locker Open 하였습니다."))
-            self.state = 1
+        RunnerLocker.instance().open_locker()
+        self.logger.info(self.__format_log_msg("B1 매수 타점 도달하였습니다!"))
+        self.open_position(self.config["B1"]["qty"])
+        self.logger.info(self.__format_log_msg("Locker Open 하였습니다."))
+        self.state = 1
 
     def process_state_one(self):
+        # print(f"{"[백테스트]" if self.is_back_testing_mode else ""} 거래 중")
+        latest_price = KiwoomDAO.instance().get_backtest_latest_trade_price(self.config["stock_code"])
+        if latest_price is None:
+            self.process_state_initial()
+            self.state = 1
+            return
         # processing state: 1
-        if self.current_price >= self.config["S1"]["price"]:
+        if self.current_price >= latest_price + self.config["S1"]["price"]:
             self.logger.info(self.__format_log_msg("S1 매도 타점 도달하였습니다!"))
             self.close_position(self.config["S1"]["qty"])
-        elif self.current_price <= self.config["B2"]["price"]:
+        elif self.current_price <= latest_price - self.config["B1"]["price"]:
             self.logger.info(self.__format_log_msg("B2 매수 타점 도달하였습니다!"))
             self.open_position(self.config["B1"]["qty"])
+
         self.state = 1
 
     def open_position(self, qty):
-        KiwoomDAO.instance().open_position(
-            self.config["acc_no"], self.config["stock_code"], qty)
+        if self.is_back_testing_mode:
+            KiwoomDAO.instance().open_position_by_backtest(self.config["acc_no"], self.config["stock_code"], self.current_price, qty=qty)
+        else:
+            KiwoomDAO.instance().open_position(
+                self.config["acc_no"], self.config["stock_code"], qty)
 
     def close_position(self, qty):
-        try:
-            KiwoomDAO.instance().close_position(
-                self.config["acc_no"], self.config["stock_code"], qty=qty)
-        except NoSuchStockPositionError:
-            self.logger.info(self.__format_log_msg("매도하려고 했으나, 이미 사용자에 의해 전량 매도 되었습니다."))
+        if self.is_back_testing_mode:
+            KiwoomDAO.instance().close_position_by_backtest(self.config["acc_no"], self.config["stock_code"],
+                                                            current_price=self.current_price, qty=qty)
+        else:
+            try:
+                KiwoomDAO.instance().close_position(
+                    self.config["acc_no"], self.config["stock_code"], qty=qty)
+            except NoSuchStockPositionError:
+                self.logger.info(self.__format_log_msg("매도하려고 했으나, 이미 사용자에 의해 전량 매도 되었습니다."))
 
     def refresh_all_data(self):
         self.current_price = KiwoomDAO.instance().get_current_price(self.config["stock_code"])
