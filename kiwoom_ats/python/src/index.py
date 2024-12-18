@@ -54,9 +54,20 @@ def get_hms(a, b):
 
 
 def index():
+    # 로그 디렉토리가 없으면 생성
+    log_dir = "./resources/log"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
     with open("./resources/log/logging.json") as f:
         config = json.load(f)
+        # 로그 파일 경로 설정
+        config["handlers"]["file"]["filename"] = os.path.join(log_dir, "trading.log")
     logging.config.dictConfig(config)
+
+    # 루트 로거 가져오기
+    logger = logging.getLogger(__name__)
+    logger.info("프로그램 시작")
 
     app = QApplication(sys.argv)
 

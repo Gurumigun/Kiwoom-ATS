@@ -19,6 +19,8 @@ class AtsRunner(threading.Thread):
 
     def __init__(self, config):
         super().__init__()
+        self.logger = logging.getLogger(f"{__name__}.{config['stock_code']}")
+        self.logger.info(f"AtsRunner 초기화 - {config['stock_name']}({config['stock_code']})")
         self.config = config
         self.is_back_testing_mode = ConfigParser.instance().is_back_testing_mode()
         
@@ -54,10 +56,11 @@ class AtsRunner(threading.Thread):
 
     def processing_loop(self):
         if self.is_back_testing_mode:
-            if self.trading_dao.get_backtest_latest_trade_price(self.config["stock_code"]) is None:
+            if self.trading_dao.get_latest_trade_price(self.config["stock_code"]) is None:
                 self.state = -1
             else :
                 self.state = 1
+
         print(f"{'[백테스트]' if self.is_back_testing_mode else ''} processing_loop 시작 {self.state}")
         while self.run_flag:
             self.refresh_all_data()

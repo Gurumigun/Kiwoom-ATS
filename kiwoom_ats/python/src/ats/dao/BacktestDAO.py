@@ -1,11 +1,14 @@
 from .TradingInterface import TradingInterface
 import sqlite3
 import datetime
+import logging
 
 class BacktestDAO(TradingInterface):
     __instance = None  # 싱글톤 인스턴스 저장소
+    logger = logging.getLogger(__name__)
 
     def __init__(self):
+        self.logger.info("BacktestDAO 초기화")
         self.history_db_conn = sqlite3.connect("./resources/backtest/stock_data.db")
         self.trading_db_conn = sqlite3.connect("./resources/backtest/backtest_ats.db")
         self.__latest_transaction_time = None

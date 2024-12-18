@@ -17,7 +17,7 @@ from python.src.ats.StockException import (NoSuchStockCodeError,
 # KiwoomDAO 클래스 정의: 주식 데이터를 요청 및 처리하는 역할
 class KiwoomDAO(TradingInterface):
     __instance = None
-    __log = logging.getLogger(__name__)
+    logger = logging.getLogger(__name__)
     __thread_locker = threading.Lock()
     __current_price_map: Dict[str, int] = dict()
     __tr_rq_single_data = None
@@ -28,6 +28,7 @@ class KiwoomDAO(TradingInterface):
     __scr_no_map: Dict[str, str] = dict()
 
     def __init__(self):
+        self.logger.info("KiwoomDAO 초기화")
         self.current_price_map = dict()
         self.trading_db_conn = self.__create_trading_db_connection()
         self.__initialize_database()
@@ -41,7 +42,7 @@ class KiwoomDAO(TradingInterface):
             self.kiwoom_instance.dynamicCall("CommConnect()")
             self.__login_eventloop.exec_()
         else:
-            self.__log.info("이미 로그인 되어 있습니다.")
+            self.logger.info("이미 로그인 되어 있습니다.")
 
     @classmethod
     def __get_instance(cls):
@@ -129,7 +130,7 @@ class KiwoomDAO(TradingInterface):
             current_price = abs(int(current_price))
 
             self.__current_price_map.setdefault(stock_code, current_price)
-            self.__log.info(f"{stock_code} 실시간 시세 등록")
+            self.logger.info(f"{stock_code} 실시간 시세 등록")
             self.kiwoom_instance.dynamicCall(
                 "SetRealReg(QString, QString, QString, QString)", self.__generate_scr_no(stock_code), stock_code, "10", "1")
             self.__thread_locker.release()
@@ -138,13 +139,13 @@ class KiwoomDAO(TradingInterface):
 
     def open_position(self, acc_no: str, stock_code: str, qty: int) -> None:
         # 키움 API를 통한 실제 매수 주문만 수행
-        self.__log.info(f"매수 주문 요청\n  계좌번호: {acc_no}  종목코드: {stock_code}  주문수량: {qty}")
+        self.logger.info(f"매수 주문 요청\n  계좌번호: {acc_no}  종목코드: {stock_code}  주문수량: {qty}")
         self.kiwoom_instance.dynamicCall(
             "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)", [
                 "주식 매수 주문", self.__generate_scr_no(stock_code), acc_no, 1, stock_code, qty, 0, "03", ""])
 
     def close_position(self, acc_no: str, stock_code: str, qty: int) -> None:
-        self.__log.info(f"매도 주문 요청\n  계좌번호: {acc_no}  종목코드: {stock_code}  주문수량: {qty}")
+        self.logger.info(f"매도 주문 요청\n  계좌번호: {acc_no}  종목코드: {stock_code}  주문수량: {qty}")
         # 키움 API를 통한 실제 매도 주문만 수행
         self.kiwoom_instance.dynamicCall(
             "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)", [
@@ -212,10 +213,10 @@ class KiwoomDAO(TradingInterface):
         val = int(val)
         if val != 0:
             if val == -200:
-                self.__log.fatal(f"RQ DATA [{val}]: 시세 과부하")
+                self.logger.fatal(f"RQ DATA [{val}]: 시세 과부하")
             elif val == -201:
-                self.__log.fatal(f"RQ DATA [{val}]:  조회 문작성 에러")
-            self.__log.fatal(f"RQ DATA [{val}]: 에러 발생!!!")
+                self.logger.fatal(f"RQ DATA [{val}]:  조회 문작성 에러")
+            self.logger.fatal(f"RQ DATA [{val}]: 에러 발생!!!")
 
     def __set_input_values(self, input_value: Dict[str, str]):
         '''
@@ -258,21 +259,21 @@ class KiwoomDAO(TradingInterface):
     # 키움 OpenAPI 연결 시 호출되는 슬롯
     def __on_event_connect_slot(self, err_code):
         if err_code == 0:  # 연결 성공
-            self.__log.info("로그인 성공")
+            self.logger.info("로그인 성공")
         else:  # 연결 실패
-            self.__log.info("로그인 실패")
+            self.logger.info("로그인 실패")
 
         # 서버 종류 확인 (모의투자/실거래)
         if self.kiwoom_instance.dynamicCall("GetLoginInfo(\"GetServerGubun\")") == "1":
-            self.__log.info("모의투자 서버 접속")
+            self.logger.info("모의투자 서버 접속")
         else:
-            self.__log.info("실거래 서버 접속")
+            self.logger.info("실거래 서버 접속")
 
         self.__login_eventloop.exit()  # 로그인 이벤트 루프 종료
 
     # 메시지 수신 시 호출되는 슬롯
     def __on_receive_msg(self, scr_no, rq_name, tr_code, msg):
-        self.__log.info(f"{rq_name}: {msg}")  # 메시지 로그 출력
+        self.logger.info(f"{rq_name}: {msg}")  # 메시지 로그 출력
 
     # 실시간 데이터 수신 시 호출되는 슬롯
     def __on_receive_real_data(self, stock_code, real_type, real_data):
@@ -282,9 +283,9 @@ class KiwoomDAO(TradingInterface):
         elif real_type == "장시작시간":  # 장 시작 시간
             self.__market_status = int(self.kiwoom_instance.dynamicCall(
                 "GetCommRealData(QString, int)", stock_code, 215))  # 시장 상태 업데이트
-            self.__log.info(f"market status: {self.__market_status}")
+            self.logger.info(f"market status: {self.__market_status}")
             if self.__market_status == 8:  # 장 종료 시
-                self.__log.info("장 종료")
+                self.logger.info("장 종료")
 
     # 체결 데이터 수신 시 호출되는 슬롯
     def __on_receive_chejan_data(self, gubun, item_cnt, fid_list):
@@ -307,10 +308,10 @@ class KiwoomDAO(TradingInterface):
                         VALUES (?, ?, ?, ?, ?, ?)
                     ''', (self.__get_next_trade_id(), transaction_time, stock_code, trade_price, qty, acc_no))
                     self.trading_db_conn.commit()
-                    self.__log.info(f"매수 체결 완료: 계좌번호: {acc_no}, 종목코드: {stock_code}, 체결가격: {trade_price}, 체결수량: {qty}")
+                    self.logger.info(f"매수 체결 완료: 계좌번호: {acc_no}, 종목코드: {stock_code}, 체결가격: {trade_price}, 체결수량: {qty}")
                 except Exception as e:
                     self.trading_db_conn.rollback()
-                    self.__log.error(f"매수 처리 중 오류 발생: {e}")
+                    self.logger.error(f"매수 처리 중 오류 발생: {e}")
 
             elif trade_type == "1":  # 매도
                 try:
@@ -334,14 +335,14 @@ class KiwoomDAO(TradingInterface):
 
                         cursor.execute('DELETE FROM trading_active_stocks WHERE _id = ?', (buy_trade[0],))
                         self.trading_db_conn.commit()
-                        self.__log.info(f"매도 체결 완료: 계좌번호: {acc_no}, 종목코드: {stock_code}, 체결가격: {trade_price}, 체결수량: {qty}, 수익: {profit}")
+                        self.logger.info(f"매도 체결 완료: 계좌번호: {acc_no}, 종목코드: {stock_code}, 체결가격: {trade_price}, 체결수량: {qty}, 수익: {profit}")
                     else:
-                        self.__log.warning(f"매도 처리 실패: 활성 거래를 찾을 수 없음 (종목코드: {stock_code}, 계좌번호: {acc_no})")
+                        self.logger.warning(f"매도 처리 실패: 활성 거래를 찾을 수 없음 (종목코드: {stock_code}, 계좌번호: {acc_no})")
                 except Exception as e:
                     self.trading_db_conn.rollback()
-                    self.__log.error(f"매도 처리 중 오류 발생: {e}")
+                    self.logger.error(f"매도 처리 중 오류 발생: {e}")
         elif gubun == "0":
-            self.__log.info(f"체결 데이터 수신: 계좌번호: {acc_no}, 종목코드: {stock_code}, 체결가격: {trade_price}, 체결수량: {qty}, 주문구분: {order_type}, 체결구분: {trade_type}")
+            self.logger.info(f"체결 데이터 수신: 계좌번호: {acc_no}, 종목코드: {stock_code}, 체결가격: {trade_price}, 체결수량: {qty}, 주문구분: {order_type}, 체결구분: {trade_type}")
 
     # 모든 슬롯을 등록하는 메서드
     def __register_all_slots(self):
