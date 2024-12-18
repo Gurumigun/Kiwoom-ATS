@@ -16,16 +16,16 @@ from python.src.ats.StockException import (NoSuchStockCodeError,
 
 # KiwoomDAO 클래스 정의: 주식 데이터를 요청 및 처리하는 역할
 class KiwoomDAO(TradingInterface):
-    __log = logging.getLogger(__name__)  # 로깅 설정
-    __thread_locker = threading.Lock()  # 스레드 동기화를 위한 락
-    __instance = None  # 싱글톤 인스턴스 저장소
-    __current_price_map: Dict[str, int] = dict()  # 종목별 현재가 저장소
+    __instance = None
+    __log = logging.getLogger(__name__)
+    __thread_locker = threading.Lock()
+    __current_price_map: Dict[str, int] = dict()
     __tr_rq_single_data = None
     __tr_rq_multi_data = None
     __tr_data_cnt_limit = 0
-    __market_status = -1  # 시장 상태 저장소
-    __scr_no_counter = 2000  # 스크린 번호 초기값
-    __scr_no_map: Dict[str, str] = dict()  # 종목별 스크린 번호 저장소
+    __market_status = -1
+    __scr_no_counter = 2000
+    __scr_no_map: Dict[str, str] = dict()
 
     def __init__(self):
         self.current_price_map = dict()
@@ -42,6 +42,16 @@ class KiwoomDAO(TradingInterface):
             self.__login_eventloop.exec_()
         else:
             self.__log.info("이미 로그인 되어 있습니다.")
+
+    @classmethod
+    def __get_instance(cls):
+        return cls.__instance
+
+    @classmethod
+    def instance(cls, *args, **kargs):
+        cls.__instance = cls(*args, **kargs)
+        cls.instance = cls.__get_instance
+        return cls.__instance
 
     def __create_trading_db_connection(self):
         FILE_PATH = "./resources/trading/trading.db"
@@ -78,48 +88,35 @@ class KiwoomDAO(TradingInterface):
         
         self.trading_db_conn.commit()
 
-    # 종목명 반환
+    # TradingInterface 구현
     def get_stock_name(self, stock_code: str) -> str:
-        '''종목명 리턴
-
-        Parameters
-        ----------
-        stock_code : str
-            종목 코드
-
-        Returns
-        -------
-        str
-            종목명
-        '''
-        self.__thread_locker.acquire()  # 스레드 락 획득
+        self.__thread_locker.acquire()
         name = self.kiwoom_instance.dynamicCall(
-            "GetMasterCodeName(QString)", stock_code)  # 종목명 요청
-        self.__thread_locker.release()  # 스레드 락 해제
+            "GetMasterCodeName(QString)", stock_code)
+        self.__thread_locker.release()
         if name.__len__() == 0:
-            raise NoSuchStockCodeError(f"{stock_code} is not valid stock code")  # 종목명 없으면 예외 발생
-        return name  # 종목명 반환
+            raise NoSuchStockCodeError(f"{stock_code} is not valid stock code")
+        return name
 
-    # 계좌번호로 예수금 반환
     def get_available_balance(self, acc_no: str) -> int:
-        '''예수금
-
-        Parameters
-        ----------
-        acc_no : str
-            계좌번호
-        '''
-        self.__thread_locker.acquire()  # 스레드 락 획득
+        """계좌의 예수금 조회
+        
+        Args:
+            acc_no (str): 계좌번호
+            
+        Returns:
+            int: 예수금
+        """
+        self.__thread_locker.acquire()
         balance = int(self.__get_tr_data({
             "계좌번호": acc_no,
             "비밀번호": "",
             "상장폐지조회구분": "1",
             "비밀번호입력매체구분": "00"
-        }, "주식 잔고 요청", "OPW00004", "0", "5000", ["예수금"], [])["single_data"]["예수금"])  # 예수금 요청
-        self.__thread_locker.release()  # 스레드 락 해제
-        return balance  # 예수금 반환
+        }, "주식 잔고 요청", "OPW00004", "0", "5000", ["예수금"], [])["single_data"]["예수금"])
+        self.__thread_locker.release()
+        return balance
 
-    # 종목코드로 현재가 반환
     def get_current_price(self, stock_code: str) -> int:
         if not self.__current_price_map.__contains__(stock_code):
             self.__thread_locker.acquire()
@@ -139,15 +136,6 @@ class KiwoomDAO(TradingInterface):
 
         return self.__current_price_map[stock_code]
 
-    # 종목 상태 반환
-    def get_stock_state(self, stock_code: str):
-        self.__thread_locker.acquire()  # 스레드 락 획득
-        val: str = self.kiwoom_instance.dynamicCall("GetMasterStockState(QString)", stock_code)  # 종목 상태 요청
-        self.__thread_locker.release()  # 스레드 락 해제
-        out_val = val.strip().split("|")[1:]  # 상태 정보 파싱
-        return out_val  # 상태 정보 반환
-
-    # 매수 주문
     def open_position(self, acc_no: str, stock_code: str, qty: int) -> None:
         # 키움 API를 통한 실제 매수 주문만 수행
         self.__log.info(f"매수 주문 요청\n  계좌번호: {acc_no}  종목코드: {stock_code}  주문수량: {qty}")
@@ -155,7 +143,6 @@ class KiwoomDAO(TradingInterface):
             "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)", [
                 "주식 매수 주문", self.__generate_scr_no(stock_code), acc_no, 1, stock_code, qty, 0, "03", ""])
 
-    # 매도 주문
     def close_position(self, acc_no: str, stock_code: str, qty: int) -> None:
         self.__log.info(f"매도 주문 요청\n  계좌번호: {acc_no}  종목코드: {stock_code}  주문수량: {qty}")
         # 키움 API를 통한 실제 매도 주문만 수행
@@ -163,7 +150,17 @@ class KiwoomDAO(TradingInterface):
             "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)", [
                 "주식 매도 주문", self.__generate_scr_no(stock_code), acc_no, 2, stock_code, qty, 0, "03", ""])
 
-    # TR 데이터 요청
+    def get_latest_trade_price(self, stock_code: str):
+        cursor = self.trading_db_conn.cursor()
+        cursor.execute('''
+            SELECT trade_price FROM trading_active_stocks 
+            WHERE stock_code = ? 
+            ORDER BY transaction_time DESC LIMIT 1
+        ''', (stock_code,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+    # 기존 private 메서드들...
     def __get_tr_data(self, input_value: Dict[str, str], rq_name, tr_code, perv_next: str, scr_no: str,
                       rq_single_data: List[str], rq_multi_data: List[str], cnt=0):
         '''키움 API서버에 TR 데이터를 요청한다.
@@ -356,16 +353,6 @@ class KiwoomDAO(TradingInterface):
         self.kiwoom_instance.OnReceiveMsg.connect(self.__on_receive_msg)  # 메시지 수신 슬롯
         self.kiwoom_instance.OnReceiveChejanData.connect(
             self.__on_receive_chejan_data)  # 체결 데이터 수신 슬롯
-
-    def get_latest_trade_price(self, stock_code: str):
-        cursor = self.trading_db_conn.cursor()
-        cursor.execute('''
-            SELECT trade_price FROM trading_active_stocks 
-            WHERE stock_code = ? 
-            ORDER BY transaction_time DESC LIMIT 1
-        ''', (stock_code,))
-        result = cursor.fetchone()
-        return result[0] if result else None
 
     def __get_next_trade_id(self) -> int:
         cursor = self.trading_db_conn.cursor()

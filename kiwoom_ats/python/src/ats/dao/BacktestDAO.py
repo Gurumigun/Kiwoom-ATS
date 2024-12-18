@@ -3,11 +3,23 @@ import sqlite3
 import datetime
 
 class BacktestDAO(TradingInterface):
+    __instance = None  # 싱글톤 인스턴스 저장소
+
     def __init__(self):
         self.history_db_conn = sqlite3.connect("./resources/backtest/stock_data.db")
         self.trading_db_conn = sqlite3.connect("./resources/backtest/backtest_ats.db")
         self.__latest_transaction_time = None
         self.__current_price_map = {}
+
+    @classmethod
+    def __get_instance(cls):
+        return cls.__instance
+
+    @classmethod
+    def instance(cls, *args, **kargs):
+        cls.__instance = cls(*args, **kargs)
+        cls.instance = cls.__get_instance
+        return cls.__instance
 
     def get_current_price(self, stock_code: str) -> int:
         cursor = self.history_db_conn.cursor()
