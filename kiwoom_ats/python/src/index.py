@@ -10,8 +10,7 @@ from PyQt5.QtWidgets import QApplication
 
 from python.src.ats.ConfigParser import ConfigParser
 from python.src.ats.RunnerController import Controller
-from python.src.ats.TradingDAO import TradingDAO
-from kiwoom_ats.python.src.ats.dao.KiwoomDAO import KiwoomDAO
+from python.src.ats.dao.KiwoomDAO import KiwoomDAO
 from python.src.ats.dao.BacktestDAO import BacktestDAO
 
 
@@ -68,30 +67,19 @@ def index():
     else:
         trading_dao = KiwoomDAO.instance()
         print("실제 거래 모드입니다.")
-        stock_list = TradingDAO.instance().get_unfinished_trading_data()
+        stock_list = ConfigParser.instance().load_stock_config()
 
     controller = Controller(trading_dao)
 
     if stock_list.__len__() == 0:
-        print("이전에 진행하던 거래 없음")
+        print("등록된 종목이 없습니다.")
     else:
-        print("===== 이전 거래 이어서 진행 =====")
-        for stock in stock_list:
-            stock["stock_name"] = trading_dao.get_stock_name(stock["stock_code"])
-            controller.add_runner(stock)
-            print(f"{stock['stock_name']}({stock['stock_code']})")
-            QTest.qWait(1000)
-
-    stock_list = ConfigParser.instance().load_stock_config()
-
-    if stock_list.__len__() == 0:
-        print("입력된 새로운 종목이 없습니다.")
-    else:
-        print("===== 새로운 종목 =====")
+        print("===== 주식 목록 =====")
         for stock in stock_list:
             controller.add_runner(stock)
             print(f"{stock['stock_name']}({stock['stock_code']})")
             QTest.qWait(1000)
+
     if is_after_market_close_time():
         print("장 종료되었습니다.")
         sys.exit()

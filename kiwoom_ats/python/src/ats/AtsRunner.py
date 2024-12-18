@@ -58,7 +58,7 @@ class AtsRunner(threading.Thread):
                 self.state = -1
             else :
                 self.state = 1
-        print(f"{"[백테스트]" if self.is_back_testing_mode else ""} processing_loop 시작 {self.state}")
+        print(f"{'[백테스트]' if self.is_back_testing_mode else ''} processing_loop 시작 {self.state}")
         while self.run_flag:
             self.refresh_all_data()
             if self.state == -1:
