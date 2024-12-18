@@ -11,7 +11,8 @@ from PyQt5.QtWidgets import QApplication
 from python.src.ats.ConfigParser import ConfigParser
 from python.src.ats.RunnerController import Controller
 from python.src.ats.TradingDAO import TradingDAO
-from python.src.ats.KiwoomDAO import KiwoomDAO
+from kiwoom_ats.python.src.ats.dao.KiwoomDAO import KiwoomDAO
+from python.src.ats.dao.BacktestDAO import BacktestDAO
 
 
 def get_market_closeing_time() -> datetime.datetime:
@@ -60,76 +61,62 @@ def index():
 
     app = QApplication(sys.argv)
 
-    KiwoomDAO.instance()
-
-    controller = Controller()
-
     if ConfigParser.instance().is_back_testing_mode():
+        trading_dao = BacktestDAO.instance()
         print("========= 백테스팅 모드입니다. ==========")
         stock_list = ConfigParser.instance().load_back_testing_stock_config()
-        for stock in stock_list:
-            print(f"[백테스팅] {stock['stock_name']}({stock['stock_code']})")
-            controller.add_runner(stock)
-            QTest.qWait(1000)
-
-        QTest.qWait(1000)
-        controller.run_all()
-        QTest.qWait(9999000)
-        # wait_until_market_close()
     else:
+        trading_dao = KiwoomDAO.instance()
         print("실제 거래 모드입니다.")
-
         stock_list = TradingDAO.instance().get_unfinished_trading_data()
 
-        if (is_after_market_close_time()):
-            print("이미 장 종료되었습니다.")
-            print("===== 내일 진행할 거래 =====")
+    controller = Controller(trading_dao)
 
-        if stock_list.__len__() == 0:
-            print("이전에 진행하던 거래 없음")
-        else:
-            print("===== 이전 거래 이어서 진행 =====")
-            for stock in stock_list:
-                stock["stock_name"] = KiwoomDAO.instance().get_stock_name(stock["stock_code"])
-                controller.add_runner(stock)
-                print(f"{stock['stock_name']}({stock['stock_code']})")
-                QTest.qWait(1000)
+    if stock_list.__len__() == 0:
+        print("이전에 진행하던 거래 없음")
+    else:
+        print("===== 이전 거래 이어서 진행 =====")
+        for stock in stock_list:
+            stock["stock_name"] = trading_dao.get_stock_name(stock["stock_code"])
+            controller.add_runner(stock)
+            print(f"{stock['stock_name']}({stock['stock_code']})")
+            QTest.qWait(1000)
 
-        stock_list = ConfigParser.instance().load_stock_config()
+    stock_list = ConfigParser.instance().load_stock_config()
 
-        if stock_list.__len__() == 0:
-            print("입력된 새로운 종목이 없습니다.")
-        else:
-            print("===== 새로운 종목 =====")
-            for stock in stock_list:
-                controller.add_runner(stock)
-                print(f"{stock['stock_name']}({stock['stock_code']})")
-                QTest.qWait(1000)
-        if is_after_market_close_time():
-            print("장 종료되었습니다.")
-            sys.exit()
+    if stock_list.__len__() == 0:
+        print("입력된 새로운 종목이 없습니다.")
+    else:
+        print("===== 새로운 종목 =====")
+        for stock in stock_list:
+            controller.add_runner(stock)
+            print(f"{stock['stock_name']}({stock['stock_code']})")
+            QTest.qWait(1000)
+    if is_after_market_close_time():
+        print("장 종료되었습니다.")
+        sys.exit()
 
-        if (controller.runner_list.__len__() == 0):
-            print("에러: 실행할 종목이 아무것도 없습니다!")
-            sys.exit()
+    if (controller.runner_list.__len__() == 0):
+        print("에러: 실행할 종목이 아무것도 없습니다!")
+        sys.exit()
 
-        if (is_before_market_start_time()):
-            hour, minute, second = get_hms(get_market_start_time(), datetime.datetime.now())
-            print(f"\n장 시작 까지 {hour}시간 {minute}분 {second}초 남았습니다.")
-            wait_until_market_start()
-        print("장 시작하였습니다!\n5초 후 프로그램 가동!!!\a")
-        QTest.qWait(5000)
-        print("\a")
-        controller.run_all()
+    if (is_before_market_start_time()):
+        hour, minute, second = get_hms(get_market_start_time(), datetime.datetime.now())
+        print(f"\n장 시작 까지 {hour}시간 {minute}분 {second}초 남았습니다.")
+        wait_until_market_start()
 
-        hour, minute, second = get_hms(
-            get_market_closeing_time(), datetime.datetime.now())
-        print(f"\n장 종료 까지 {hour}시간 {minute}분 {second}초 남았습니다.\n")
-        wait_until_market_close()
+    print("장 시작하였습니다!\n5초 후 프로그램 가동!!!\a")
+    QTest.qWait(5000)
+    print("\a")
+    controller.run_all()
 
-        print("장 종료")
-        controller.stop_and_save_all()
-        app.exit()
+    hour, minute, second = get_hms(
+        get_market_closeing_time(), datetime.datetime.now())
+    print(f"\n장 종료 까지 {hour}시간 {minute}분 {second}초 남았습니다.\n")
+    wait_until_market_close()
+
+    print("장 종료")
+    app.exit()
 
     print("프로그램 종료")
 
