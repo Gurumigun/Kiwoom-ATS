@@ -60,7 +60,8 @@ def index():
 
     app = QApplication(sys.argv)
 
-    if ConfigParser.instance().is_back_testing_mode():
+    _is_back_testing_mode = ConfigParser.instance().is_back_testing_mode()
+    if _is_back_testing_mode:
         trading_dao = BacktestDAO.instance()
         print("========= 백테스팅 모드입니다. ==========")
         stock_list = ConfigParser.instance().load_back_testing_stock_config()
@@ -69,7 +70,7 @@ def index():
         print("실제 거래 모드입니다.")
         stock_list = ConfigParser.instance().load_stock_config()
 
-    controller = Controller(trading_dao)
+    controller = Controller()
 
     if stock_list.__len__() == 0:
         print("등록된 종목이 없습니다.")
@@ -80,18 +81,19 @@ def index():
             print(f"{stock['stock_name']}({stock['stock_code']})")
             QTest.qWait(1000)
 
-    if is_after_market_close_time():
-        print("장 종료되었습니다.")
-        sys.exit()
-
     if (controller.runner_list.__len__() == 0):
         print("에러: 실행할 종목이 아무것도 없습니다!")
         sys.exit()
 
-    if (is_before_market_start_time()):
-        hour, minute, second = get_hms(get_market_start_time(), datetime.datetime.now())
-        print(f"\n장 시작 까지 {hour}시간 {minute}분 {second}초 남았습니다.")
-        wait_until_market_start()
+    if not _is_back_testing_mode:
+        if is_after_market_close_time():
+            print("장 종료되었습니다.")
+            sys.exit()
+
+        if (is_before_market_start_time()):
+            hour, minute, second = get_hms(get_market_start_time(), datetime.datetime.now())
+            print(f"\n장 시작 까지 {hour}시간 {minute}분 {second}초 남았습니다.")
+            wait_until_market_start()
 
     print("장 시작하였습니다!\n5초 후 프로그램 가동!!!\a")
     QTest.qWait(5000)
