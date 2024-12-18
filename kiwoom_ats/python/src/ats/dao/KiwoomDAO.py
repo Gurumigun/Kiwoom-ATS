@@ -19,19 +19,11 @@ class KiwoomDAO(TradingInterface):
     __instance = None
     logger = logging.getLogger(__name__)
     __thread_locker = threading.Lock()
-    __current_price_map: Dict[str, int] = dict()
-    __tr_rq_single_data = None
-    __tr_rq_multi_data = None
-    __tr_data_cnt_limit = 0
-    __market_status = -1
-    __scr_no_counter = 2000
-    __scr_no_map: Dict[str, str] = dict()
+    __local = threading.local()  # 스레드별 로컬 저장소
 
     def __init__(self):
         self.logger.info("KiwoomDAO 초기화")
-        self.current_price_map = dict()
-        self.trading_db_conn = self.__create_trading_db_connection()
-        self.__initialize_database()
+        self.__initialize_connections()
 
         self.kiwoom_instance = QAxWidget("KHOPENAPI.KHOpenAPICtrl.1")
         self.__register_all_slots()
@@ -54,13 +46,20 @@ class KiwoomDAO(TradingInterface):
         cls.instance = cls.__get_instance
         return cls.__instance
 
+    def __initialize_connections(self):
+        """현재 스레드의 연결 초기화"""
+        if not hasattr(self.__local, 'trading_db_conn'):
+            self.__local.trading_db_conn = self.__create_trading_db_connection()
+            self.__local.current_price_map = {}
+            self.__initialize_database()
+
     def __create_trading_db_connection(self):
         FILE_PATH = "./resources/trading/trading.db"
         return sqlite3.connect(FILE_PATH)
 
     def __initialize_database(self):
         """데이터베이스 테이블 초기화"""
-        cursor = self.trading_db_conn.cursor()
+        cursor = self.__local.trading_db_conn.cursor()
         
         # trading_active_stocks 테이블 생성
         cursor.execute('''
@@ -87,7 +86,7 @@ class KiwoomDAO(TradingInterface):
             )
         ''')
         
-        self.trading_db_conn.commit()
+        self.__local.trading_db_conn.commit()
 
     # TradingInterface 구현
     def get_stock_name(self, stock_code: str) -> str:
@@ -119,7 +118,8 @@ class KiwoomDAO(TradingInterface):
         return balance
 
     def get_current_price(self, stock_code: str) -> int:
-        if not self.__current_price_map.__contains__(stock_code):
+        self.__initialize_connections()
+        if not self.__local.current_price_map.__contains__(stock_code):
             self.__thread_locker.acquire()
             current_price: str = self.__get_tr_data({
                 "종목코드": stock_code
@@ -129,13 +129,13 @@ class KiwoomDAO(TradingInterface):
                 raise RuntimeError(f"{stock_code} 종목의 현재가 받아올 수 없음")
             current_price = abs(int(current_price))
 
-            self.__current_price_map.setdefault(stock_code, current_price)
+            self.__local.current_price_map.setdefault(stock_code, current_price)
             self.logger.info(f"{stock_code} 실시간 시세 등록")
             self.kiwoom_instance.dynamicCall(
                 "SetRealReg(QString, QString, QString, QString)", self.__generate_scr_no(stock_code), stock_code, "10", "1")
             self.__thread_locker.release()
 
-        return self.__current_price_map[stock_code]
+        return self.__local.current_price_map[stock_code]
 
     def open_position(self, acc_no: str, stock_code: str, qty: int) -> None:
         # 키움 API를 통한 실제 매수 주문만 수행
@@ -152,7 +152,8 @@ class KiwoomDAO(TradingInterface):
                 "주식 매도 주문", self.__generate_scr_no(stock_code), acc_no, 2, stock_code, qty, 0, "03", ""])
 
     def get_latest_trade_price(self, stock_code: str):
-        cursor = self.trading_db_conn.cursor()
+        self.__initialize_connections()
+        cursor = self.__local.trading_db_conn.cursor()
         cursor.execute('''
             SELECT trade_price FROM trading_active_stocks 
             WHERE stock_code = ? 
@@ -277,8 +278,9 @@ class KiwoomDAO(TradingInterface):
 
     # 실시간 데이터 수신 시 호출되는 슬롯
     def __on_receive_real_data(self, stock_code, real_type, real_data):
+        self.__initialize_connections()
         if real_type == "주식체결":  # 실시간 주식 체결 데이터
-            self.__current_price_map[stock_code] = abs(int(self.kiwoom_instance.dynamicCall(
+            self.__local.current_price_map[stock_code] = abs(int(self.kiwoom_instance.dynamicCall(
                 "GetCommRealData(QString, int)", stock_code, 10)))  # 현재가 업데이트
         elif real_type == "장시작시간":  # 장 시작 시간
             self.__market_status = int(self.kiwoom_instance.dynamicCall(
@@ -289,6 +291,7 @@ class KiwoomDAO(TradingInterface):
 
     # 체결 데이터 수신 시 호출되는 슬롯
     def __on_receive_chejan_data(self, gubun, item_cnt, fid_list):
+        self.__initialize_connections()
         acc_no = self.kiwoom_instance.dynamicCall("GetChejanData(9201)")  # 계좌번호 수신
         stock_code = self.kiwoom_instance.dynamicCall("GetChejanData(9001)")[1:].strip()  # 종목코드 수신
         trade_price = abs(int(self.kiwoom_instance.dynamicCall("GetChejanData(910)")))  # 체결가격
@@ -297,7 +300,7 @@ class KiwoomDAO(TradingInterface):
         trade_type = self.kiwoom_instance.dynamicCall("GetChejanData(212)").strip()
 
         if gubun == "1":  # 주문 체결 완료
-            cursor = self.trading_db_conn.cursor()
+            cursor = self.__local.trading_db_conn.cursor()
             transaction_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             if trade_type == "2":  # 매수
@@ -307,10 +310,10 @@ class KiwoomDAO(TradingInterface):
                         (_id, transaction_time, stock_code, trade_price, qty, acc_no)
                         VALUES (?, ?, ?, ?, ?, ?)
                     ''', (self.__get_next_trade_id(), transaction_time, stock_code, trade_price, qty, acc_no))
-                    self.trading_db_conn.commit()
+                    self.__local.trading_db_conn.commit()
                     self.logger.info(f"매수 체결 완료: 계좌번호: {acc_no}, 종목코드: {stock_code}, 체결가격: {trade_price}, 체결수량: {qty}")
                 except Exception as e:
-                    self.trading_db_conn.rollback()
+                    self.__local.trading_db_conn.rollback()
                     self.logger.error(f"매수 처리 중 오류 발생: {e}")
 
             elif trade_type == "1":  # 매도
@@ -334,12 +337,12 @@ class KiwoomDAO(TradingInterface):
                         ''', (buy_trade[0], transaction_time, stock_code, trade_price, qty, acc_no, profit))
 
                         cursor.execute('DELETE FROM trading_active_stocks WHERE _id = ?', (buy_trade[0],))
-                        self.trading_db_conn.commit()
+                        self.__local.trading_db_conn.commit()
                         self.logger.info(f"매도 체결 완료: 계좌번호: {acc_no}, 종목코드: {stock_code}, 체결가격: {trade_price}, 체결수량: {qty}, 수익: {profit}")
                     else:
                         self.logger.warning(f"매도 처리 실패: 활성 거래를 찾을 수 없음 (종목코드: {stock_code}, 계좌번호: {acc_no})")
                 except Exception as e:
-                    self.trading_db_conn.rollback()
+                    self.__local.trading_db_conn.rollback()
                     self.logger.error(f"매도 처리 중 오류 발생: {e}")
         elif gubun == "0":
             self.logger.info(f"체결 데이터 수신: 계좌번호: {acc_no}, 종목코드: {stock_code}, 체결가격: {trade_price}, 체결수량: {qty}, 주문구분: {order_type}, 체결구분: {trade_type}")
@@ -356,7 +359,7 @@ class KiwoomDAO(TradingInterface):
             self.__on_receive_chejan_data)  # 체결 데이터 수신 슬롯
 
     def __get_next_trade_id(self) -> int:
-        cursor = self.trading_db_conn.cursor()
+        cursor = self.__local.trading_db_conn.cursor()
         cursor.execute('''
             SELECT COUNT(*) FROM (
                 SELECT _id FROM trading_active_stocks
