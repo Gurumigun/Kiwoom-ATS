@@ -3,7 +3,7 @@ import threading
 import time
 
 from python.src.ats.ConfigParser import ConfigParser
-from kiwoom_ats.python.src.ats.dao.KiwoomDAO import KiwoomDAO
+from python.src.ats.dao.KiwoomDAO import KiwoomDAO
 from python.src.ats.RunnerLocker import RunnerLocker
 from python.src.ats.StockException import NoSuchStockPositionError
 from python.src.ats.dao.BacktestDAO import BacktestDAO

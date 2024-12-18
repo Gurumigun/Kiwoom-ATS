@@ -18,7 +18,7 @@ class Controller():
         '''예수금 '''
         config["acc_no"] = ConfigParser.instance().get_account_number()
 
-        print(f"{'[백테스팅]' if ConfigParser.instance().is_back_testing_mode() else ''} 나의 계좌번호 : {config["acc_no"]}")
+        print(f"{'[백테스팅]' if ConfigParser.instance().is_back_testing_mode() else ''} 나의 계좌번호 : {config['acc_no']}")
         self.runner_list.append(AtsRunner(config))
 
     def run_all(self):
