@@ -73,15 +73,33 @@ def index():
 
     _is_back_testing_mode = ConfigParser.instance().is_back_testing_mode()
     if _is_back_testing_mode:
-        trading_dao = BacktestDAO.instance()
         print("========= 백테스팅 모드입니다. ==========")
         stock_list = ConfigParser.instance().load_back_testing_stock_config()
     else:
-        trading_dao = KiwoomDAO.instance()
         print("실제 거래 모드입니다.")
         stock_list = ConfigParser.instance().load_stock_config()
 
     controller = Controller()
+
+    if not _is_back_testing_mode:
+        if is_after_market_close_time():
+            print("장 종료되었습니다.")
+            sys.exit()
+
+        if (is_before_market_start_time()):
+            hour, minute, second = get_hms(get_market_start_time(), datetime.datetime.now())
+            print(f"\n장 시작 까지 {hour}시간 {minute}분 {second}초 남았습니다.")
+            wait_until_market_start()
+
+        current_time = datetime.datetime.now()
+        trading_start = get_trading_start_time()
+        if current_time < trading_start:
+            wait_seconds = (trading_start - current_time).total_seconds()
+            print(f"거래 시작까지 {int(wait_seconds)}초 대기합니다.")
+            QTest.qWait(int(wait_seconds * 1000))
+
+    print("장 시작하였습니다!\n2초 후 프로그램 가동!!!\a")
+    QTest.qWait(2000)
 
     if stock_list.__len__() == 0:
         print("등록된 종목이 없습니다.")
@@ -96,18 +114,6 @@ def index():
         print("에러: 실행할 종목이 아무것도 없습니다!")
         sys.exit()
 
-    if not _is_back_testing_mode:
-        if is_after_market_close_time():
-            print("장 종료되었습니다.")
-            sys.exit()
-
-        if (is_before_market_start_time()):
-            hour, minute, second = get_hms(get_market_start_time(), datetime.datetime.now())
-            print(f"\n장 시작 까지 {hour}시간 {minute}분 {second}초 남았습니다.")
-            wait_until_market_start()
-
-    print("장 시작하였습니다!\n5초 후 프로그램 가동!!!\a")
-    QTest.qWait(5000)
     print("\a")
     controller.run_all()
 
