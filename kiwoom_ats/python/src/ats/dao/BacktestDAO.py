@@ -37,6 +37,16 @@ class BacktestDAO(TradingInterface):
         ''')
         self.trading_db_conn.commit()
 
+    @classmethod
+    def __get_instance(cls):
+        return cls.__instance
+
+    @classmethod
+    def instance(cls, *args, **kargs):
+        cls.__instance = cls(*args, **kargs)
+        cls.instance = cls.__get_instance
+        return cls.__instance
+
     def get_stock_name(self, stock_code: str) -> str:
         """백테스팅용 종목명 조회"""
         cursor = self.history_db_conn.cursor()
@@ -49,6 +59,44 @@ class BacktestDAO(TradingInterface):
             return result[0]
         return f"종목_{stock_code}"  # 백테스팅에서는 실제 종목명이 중요하지 않음
 
+    def get_latest_trade_price(self, stock_code: str):
+        """백테스팅용 최근 거래가 조회"""
+        cursor = self.trading_db_conn.cursor()
+        cursor.execute('''
+            SELECT trade_price FROM trading_active_stocks 
+            WHERE stock_code = ? 
+            ORDER BY transaction_time DESC LIMIT 1
+        ''', (stock_code,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+    def get_current_price(self, stock_code: str) -> int:
+        cursor = self.history_db_conn.cursor()
+        cursor.execute('''
+            SELECT * FROM back_testing_stock_data 
+            WHERE stock_code = ? ORDER BY transaction_time ASC
+        ''', (stock_code,))
+        rows = cursor.fetchall()
+
+        if self.__latest_transaction_time is None:
+            next_data = rows[0]
+        else:
+            for i, row in enumerate(rows):
+                if row[3] == self.__latest_transaction_time:
+                    next_data = rows[i + 1] if i < len(rows) - 1 else None
+                    break
+
+        if next_data is None:
+            print(f"[백테스트] {stock_code} 모든 데이터 처리 완료")
+            return -1  # 종료 신호
+
+        current_price = abs(int(next_data[1]))
+        print(f"[백테스트] {stock_code} 현재가: {current_price}")
+        self.__latest_transaction_time = next_data[3]
+        self.__current_price_map[stock_code] = current_price
+        
+        return current_price
+    
     def close_position(self, acc_no: str, stock_code: str, qty: int) -> None:
         """백테스팅용 매도 처리"""
         print(f"[백테스트] 매도 주문\n  계좌번호: {acc_no}  종목코드: {stock_code}  주문수량: {qty}")
@@ -80,52 +128,6 @@ class BacktestDAO(TradingInterface):
             cursor.execute('DELETE FROM trading_active_stocks WHERE _id = ?', (buy_trade[0],))
             self.trading_db_conn.commit()
 
-    def get_latest_trade_price(self, stock_code: str):
-        """백테스팅용 최근 거래가 조회"""
-        cursor = self.trading_db_conn.cursor()
-        cursor.execute('''
-            SELECT trade_price FROM trading_active_stocks 
-            WHERE stock_code = ? 
-            ORDER BY transaction_time DESC LIMIT 1
-        ''', (stock_code,))
-        result = cursor.fetchone()
-        return result[0] if result else None
-
-    @classmethod
-    def __get_instance(cls):
-        return cls.__instance
-
-    @classmethod
-    def instance(cls, *args, **kargs):
-        cls.__instance = cls(*args, **kargs)
-        cls.instance = cls.__get_instance
-        return cls.__instance
-
-    def get_current_price(self, stock_code: str) -> int:
-        cursor = self.history_db_conn.cursor()
-        cursor.execute('''
-            SELECT * FROM back_testing_stock_data 
-            WHERE stock_code = ? ORDER BY transaction_time ASC
-        ''', (stock_code,))
-        rows = cursor.fetchall()
-
-        if self.__latest_transaction_time is None:
-            next_data = rows[0]
-        else:
-            for i, row in enumerate(rows):
-                if row[3] == self.__latest_transaction_time:
-                    next_data = rows[i + 1] if i < len(rows) - 1 else None
-                    break
-
-        if next_data is None:
-            return -1
-
-        current_price = abs(int(next_data[1]))
-        print(f"[백테스트] {stock_code} 현재가: {current_price}")
-        self.__latest_transaction_time = next_data[3]
-        self.__current_price_map[stock_code] = current_price
-        
-        return current_price
 
     def open_position(self, acc_no: str, stock_code: str, qty: int) -> None:
         print(f'[백테스트] 매수 주문\n  계좌번호: {acc_no}  종목코드: {stock_code}  주문수량: {qty}')

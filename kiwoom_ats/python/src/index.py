@@ -100,12 +100,19 @@ def index():
     print("\a")
     controller.run_all()
 
-    hour, minute, second = get_hms(
-        get_market_closeing_time(), datetime.datetime.now())
-    print(f"\n장 종료 까지 {hour}시간 {minute}분 {second}초 남았습니다.\n")
-    wait_until_market_close()
+    if _is_back_testing_mode:
+        while True:
+            QTest.qWait(1000)
+            if all(not runner.run_flag for runner in controller.runner_list):
+                break
+    else:
+        hour, minute, second = get_hms(
+            get_market_closeing_time(), datetime.datetime.now())
+        print(f"\n장 종료 까지 {hour}시간 {minute}분 {second}초 남았습니다.\n")
+        wait_until_market_close()
 
     print("장 종료")
+    controller.stop_and_save_all()
     app.exit()
 
     print("프로그램 종료")
