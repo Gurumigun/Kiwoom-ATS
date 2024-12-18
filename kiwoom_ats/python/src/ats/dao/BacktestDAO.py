@@ -154,7 +154,19 @@ class BacktestDAO(TradingInterface):
             INSERT INTO trading_active_stocks 
             (_id, transaction_time, stock_code, trade_price, qty, acc_no)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (self._get_matching_row_count(stock_code), transaction_time, 
+        ''', (self.__get_next_trade_id(), transaction_time, 
               stock_code, trade_price, qty, acc_no))
         
         self.__local.trading_db_conn.commit() 
+
+    def __get_next_trade_id(self) -> int:
+        """다음 거래 ID를 생성합니다."""
+        cursor = self.__local.trading_db_conn.cursor()
+        cursor.execute('''
+            SELECT COUNT(*) FROM (
+                SELECT _id FROM trading_active_stocks
+                UNION ALL
+                SELECT _id FROM closed_trades
+            )
+        ''')
+        return cursor.fetchone()[0] + 1

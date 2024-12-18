@@ -20,6 +20,12 @@ class KiwoomDAO(TradingInterface):
     logger = logging.getLogger(__name__)
     __thread_locker = threading.Lock()
     __local = threading.local()  # 스레드별 로컬 저장소
+    __tr_rq_single_data = None
+    __tr_rq_multi_data = None
+    __tr_data_cnt_limit = 0
+    __market_status = -1
+    __scr_no_counter = 2000
+    __scr_no_map: Dict[str, str] = dict()
 
     def __init__(self):
         self.logger.info("KiwoomDAO 초기화")
@@ -291,16 +297,17 @@ class KiwoomDAO(TradingInterface):
 
     # 체결 데이터 수신 시 호출되는 슬롯
     def __on_receive_chejan_data(self, gubun, item_cnt, fid_list):
-        self.__initialize_connections()
-        acc_no = self.kiwoom_instance.dynamicCall("GetChejanData(9201)")  # 계좌번호 수신
-        stock_code = self.kiwoom_instance.dynamicCall("GetChejanData(9001)")[1:].strip()  # 종목코드 수신
-        trade_price = abs(int(self.kiwoom_instance.dynamicCall("GetChejanData(910)")))  # 체결가격
-        qty = abs(int(self.kiwoom_instance.dynamicCall("GetChejanData(911)")))  # 체결량
-        order_type = self.kiwoom_instance.dynamicCall("GetChejanData(905)").strip()  # 주문구분
+        """체결 데이터 수신 시 호출되는 슬롯"""
+        self.__initialize_connections()  # 스레드별 연결 확인
+        acc_no = self.kiwoom_instance.dynamicCall("GetChejanData(9201)")
+        stock_code = self.kiwoom_instance.dynamicCall("GetChejanData(9001)")[1:].strip()
+        trade_price = abs(int(self.kiwoom_instance.dynamicCall("GetChejanData(910)")))
+        qty = abs(int(self.kiwoom_instance.dynamicCall("GetChejanData(911)")))
+        order_type = self.kiwoom_instance.dynamicCall("GetChejanData(905)").strip()
         trade_type = self.kiwoom_instance.dynamicCall("GetChejanData(212)").strip()
 
         if gubun == "1":  # 주문 체결 완료
-            cursor = self.__local.trading_db_conn.cursor()
+            cursor = self.__local.trading_db_conn.cursor()  # 스레드별 연결 사용
             transaction_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             if trade_type == "2":  # 매수
